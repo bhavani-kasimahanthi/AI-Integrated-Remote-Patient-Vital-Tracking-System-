@@ -1,5 +1,6 @@
 //AI-Integrated-Remote-Patient-Vital-Tracking-System-
 //patient vital tracking
+
 #include <Health_inferencing.h>//edge impuulse ml model
 #include <Wire.h>
 #include "MAX30100_PulseOximeter.h"
@@ -8,26 +9,17 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <HTTPClient.h>
-
 #define REPORTING_PERIOD_MS 1000
 #define ONE_WIRE_BUS 4
 #define TELEGRAM_SEND_INTERVAL 30000 // 30 seconds between critical alerts
-
-
 const char* ssid = "Riya";
 const char* password = "123456789";
-
 const char* telegramBotToken = "7915378297:AAFzGSVnvr0V6uxuAkgIP0_ug9FEUUxizxE";
 const char* chatID = "6684705398";
-
 WebServer server(80);
-
-
 PulseOximeter pox;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
-
-
 struct VitalSigns {
   float heartRate = 0.0;
   float spo2 = 0.0;
@@ -35,40 +27,31 @@ struct VitalSigns {
   String status = "Initializing";
   String mlConfidence = "";
 } vitals;
-
 String doctorResponse = "Awaiting doctor's response";
 unsigned long lastTelegramAlert = 0;
 unsigned long lastTempRequest = 0;
 unsigned long tsLastReport = 0;
 bool tempRequestPending = false;
 bool criticalCondition = false;
-
-
 const char* STATUS_LABELS[] = {"Good", "Warning", "Critical"};
-
 // Feature extraction for Edge Impulse
 int extract_features(size_t offset, size_t length, float *out_ptr) {
     float features[] = { vitals.heartRate, vitals.temperature, vitals.spo2 };
     memcpy(out_ptr, features + offset, length * sizeof(float));
     return 0;
 }
-
-
 void classifyWithML() {
     ei::signal_t signal;
     signal.total_length = 3;
     signal.get_data = [](size_t offset, size_t length, float *out_ptr) {
         return extract_features(offset, length, out_ptr);
     };
-
     ei_impulse_result_t result;
     EI_IMPULSE_ERROR err = run_classifier(&signal, &result, false);
-
     if (err != EI_IMPULSE_OK) {
         vitals.status = "ML Error: " + String(err);
         return;
     }
-
     size_t max_index = 0;
     float max_value = result.classification[0].value;
     for (size_t i = 1; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
@@ -77,8 +60,6 @@ void classifyWithML() {
             max_value = result.classification[i].value;
         }
     }
-
- 
     if (max_index < sizeof(STATUS_LABELS)/sizeof(STATUS_LABELS[0])) {
         vitals.status = String(STATUS_LABELS[max_index]) + " (" + String(max_value * 100, 1) + "%)";
         criticalCondition = (max_index == 2); // Critical is index 2
@@ -88,11 +69,8 @@ void classifyWithML() {
         vitals.mlConfidence = "N/A";
     }
 }
-
-
 void sendTelegramAlert() {
     if (millis() - lastTelegramAlert < TELEGRAM_SEND_INTERVAL) return;
-    
     HTTPClient http;
     String url = "https://api.telegram.org/bot" + String(telegramBotToken) + "/sendMessage";
     String message = "🚨 *Critical Health Alert!* 🚨\n";
@@ -101,14 +79,11 @@ void sendTelegramAlert() {
     message += "🌡 Temp: " + String(vitals.temperature) + "°C\n";
     message += "📊 ML Confidence: " + vitals.mlConfidence + "\n";
     message += "📢 Immediate attention required!";
-
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
-    
     String payload = "{\"chat_id\":\"" + String(chatID) + "\", ";
     payload += "\"text\":\"" + message + "\", ";
     payload += "\"parse_mode\":\"Markdown\"}";
-
     int httpCode = http.POST(payload);
     if (httpCode > 0) {
         Serial.println("Telegram alert sent");
@@ -116,8 +91,7 @@ void sendTelegramAlert() {
     } else {
         Serial.println("Telegram send failed");
     }
-    http.end();
-}
+    http.end();}
 
 // Web server handlers
 void handleVitalsUpdate() {
@@ -168,7 +142,7 @@ String generateHTML() {
     <div class="dashboard">
         <h1>AI-Integrated Patient Monitoring</h1>
         
-        <div class="vitals-container">
+ <div class="vitals-container">
             <div class="vital-card">
                 <h3>Heart Rate</h3>
                 <p id="heartRate">--</p>
@@ -186,13 +160,13 @@ String generateHTML() {
             </div>
         </div>
         
-        <div class="status" id="statusBox">
+  <div class="status" id="statusBox">
             <h3>Health Status</h3>
             <p id="status">--</p>
             <p class="ml-info" id="mlConfidence">ML Confidence: --</p>
         </div>
         
-        <div class="response-panel">
+  <div class="response-panel">
             <h3>Doctor's Response</h3>
             <p id="doctorResponse">)=====";
     html += doctorResponse;
@@ -204,7 +178,7 @@ String generateHTML() {
         </div>
     </div>
 
-    <script>
+  <script>
         function updateDashboard() {
             fetch('/updateVitals')
                 .then(response => response.json())
@@ -249,11 +223,11 @@ String generateHTML() {
 void setup() {
     Serial.begin(115200);
     
-    // Initialize I2C
+  // Initialize I2C
     Wire.begin();
     delay(100);
     
-    // Connect to WiFi
+  // Connect to WiFi
     WiFi.begin(ssid, password);
     Serial.print("Connecting to WiFi");
     while (WiFi.status() != WL_CONNECTED) {
@@ -262,7 +236,7 @@ void setup() {
     }
     Serial.println("\nConnected! IP: " + WiFi.localIP().toString());
 
-    // Initialize sensors
+  // Initialize sensors
     if (!pox.begin()) {
         Serial.println("MAX30100 initialization failed!");
         while(1);
@@ -272,13 +246,13 @@ void setup() {
         Serial.println("Heartbeat detected!");
     });
 
-    sensors.begin();
+   sensors.begin();
     sensors.setWaitForConversion(false);
     sensors.requestTemperatures();
     lastTempRequest = millis();
     tempRequestPending = true;
 
-    // Setup web server
+   // Setup web server
     server.on("/", []() {
         server.send(200, "text/html", generateHTML());
     });
@@ -290,29 +264,29 @@ void setup() {
 
 void loop() {
     
-    pox.update();
+  pox.update();
     
     
-    if (tempRequestPending && (millis() - lastTempRequest >= 750)) {
+  if (tempRequestPending && (millis() - lastTempRequest >= 750)) {
         vitals.temperature = sensors.getTempCByIndex(0);
         sensors.requestTemperatures();
         lastTempRequest = millis();
     }
 
     
-    if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
+  if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
         vitals.heartRate = pox.getHeartRate();
         vitals.spo2 = pox.getSpO2();
         
-        if (vitals.heartRate > 0 && vitals.spo2 > 0) {
+   if (vitals.heartRate > 0 && vitals.spo2 > 0) {
             classifyWithML();
             
-            Serial.print("HR: "); Serial.print(vitals.heartRate);
+  Serial.print("HR: "); Serial.print(vitals.heartRate);
             Serial.print(" | SpO2: "); Serial.print(vitals.spo2);
             Serial.print(" | Temp: "); Serial.print(vitals.temperature);
             Serial.print(" | Status: "); Serial.println(vitals.status);
             
-            // Send alert if critical
+  // Send alert if critical
             if (criticalCondition) {
                 sendTelegramAlert();
             }
@@ -320,10 +294,10 @@ void loop() {
             Serial.println("Waiting for valid sensor readings...");
         }
         
-        tsLastReport = millis();
+ tsLastReport = millis();
     }
 
-    // Handle web requests
+  // Handle web requests
     server.handleClient();
 }
 //esp32 cam car
@@ -376,7 +350,7 @@ String classifyVitals(float heartRate, float spo2, float temperature) {
 void handleVitalsUpdate() {
     status = classifyVitals(heartRate, spo2, temperature);  // Ensure status updates before sending response
 
-    String json = "{";
+ String json = "{";
     json += "\"heartRate\":" + String(heartRate) + ",";
     json += "\"spo2\":" + String(spo2) + ",";
     json += "\"temperature\":" + String(temperature) + ",";
@@ -403,25 +377,25 @@ String generateHTML() {
     html += ".good { color: green; } .bad { color: orange; } .critical { color: red; }</style></head><body>";
     html += "<h2>Remote Patient Monitoring</h2>";
 
-    // Vital Signs (Will be updated by AJAX)
+// Vital Signs (Will be updated by AJAX)
     html += "<div class='box'><h3>Heart Rate: <span id='heartRate'>Loading...</span> BPM</h3></div>";
     html += "<div class='box'><h3>SpO2: <span id='spo2'>Loading...</span> %</h3></div>";
     html += "<div class='box'><h3>Temperature: <span id='temperature'>Loading...</span> °C</h3></div>";
     
-    // Status
+  // Status
     html += "<div class='box' id='statusBox'><h3>Status: <span id='status'>Loading...</span></h3></div>";
 
-    // Doctor's response section
+  // Doctor's response section
     html += "<h3>Doctor's Response:</h3>";
     html += "<div class='box'><h3 id='doctorResponse'>Loading...</h3></div>";
 
-    // Input form for doctor's response
+  // Input form for doctor's response
     html += "<form id='responseForm' onsubmit='sendResponse(event)'>";
     html += "<input type='text' id='responseInput' name='response' placeholder='Enter response' required>";
     html += "<input type='submit' value='Submit'>";
     html += "</form>";
 
-    // AJAX script for live updates
+   // AJAX script for live updates
     html += "<script>";
     html += "function updateVitals() {";
     html += "fetch('/updateVitals').then(response => response.json()).then(data => {";
@@ -433,7 +407,7 @@ String generateHTML() {
     html += "document.getElementById('doctorResponse').innerText = data.doctorResponse;";
     html += "});} setInterval(updateVitals, 3000);"; // Fetch new data every 3 seconds
 
-    // AJAX for doctor response
+  // AJAX for doctor response
     html += "function sendResponse(event) {";
     html += "event.preventDefault();";
     html += "let response = document.getElementById('responseInput').value;";
@@ -442,7 +416,7 @@ String generateHTML() {
     html += "}";
     html += "</script>";
 
-    html += "</body></html>";
+  html += "</body></html>";
     return html;
 }
 
@@ -454,7 +428,7 @@ void handleRoot() {
 void setup() {
     Serial.begin(115200);
 
-    // WiFi connection
+  // WiFi connection
     WiFi.begin(ssid, password);
     Serial.print("Connecting to WiFi");
     while (WiFi.status() != WL_CONNECTED) {
@@ -463,21 +437,21 @@ void setup() {
     }
     Serial.println("\nConnected! IP address: " + WiFi.localIP().toString());
 
-    // Initialize MAX30100
+   // Initialize MAX30100
     if (!pox.begin()) {
         Serial.println("MAX30100 initialization failed!");
         while (1);
     }
     pox.setIRLedCurrent(MAX30100_LED_CURR_24MA);
 
-    // Initialize DS18B20
+  // Initialize DS18B20
     sensors.begin();
     sensors.setWaitForConversion(false);
     sensors.requestTemperatures();
     lastTempRequest = millis();
     tempRequestPending = true;
 
-    // Start Web Server
+  // Start Web Server
     server.on("/", handleRoot);
     server.on("/updateVitals", handleVitalsUpdate);
     server.on("/response", HTTP_POST, handleDoctorResponse);
@@ -489,14 +463,14 @@ void loop() {
     // Update MAX30100
     pox.update();
     
-    // Handle DS18B20 temperature reading
+  // Handle DS18B20 temperature reading
     if (tempRequestPending && (millis() - lastTempRequest >= 750)) {
         temperature = sensors.getTempCByIndex(0);
         sensors.requestTemperatures();
         lastTempRequest = millis();
     }
 
-    // Report MAX30100 data periodically
+  // Report MAX30100 data periodically
     if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
         heartRate = pox.getHeartRate();
         spo2 = pox.getSpO2();
@@ -504,6 +478,6 @@ void loop() {
         tsLastReport = millis();
     }
 
-    // Handle web server requests
+   // Handle web server requests
     server.handleClient();
 }
